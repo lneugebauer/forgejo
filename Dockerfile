@@ -1,4 +1,4 @@
-FROM codeberg.org/forgejo/forgejo:11
+FROM codeberg.org/forgejo/forgejo:11.0.3
 
 RUN apk update && \
     apk add ruby ruby-dev build-base && \
