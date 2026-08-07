@@ -1,0 +1,41 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": [
+    "before 6am"
+  ],
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": null,
+  "packageRules": [
+    {
+      "description": "Reproduce the existing commit style: 'chore: use forgejo X.Y.Z image'",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "code.forgejo.org/forgejo/forgejo"
+      ],
+      "commitMessageAction": "use",
+      "commitMessageTopic": "forgejo",
+      "commitMessageExtra": "{{newVersion}} image",
+      "commitMessageSuffix": ""
+    },
+    {
+      "description": "Stay on the current Forgejo LTS line. A new major (the next LTS) is listed on the Dependency Dashboard for manual approval instead of being opened as a PR.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "code.forgejo.org/forgejo/forgejo"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}
