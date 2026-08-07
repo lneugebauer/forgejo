@@ -17,7 +17,7 @@
         "docker"
       ],
       "matchPackageNames": [
-        "codeberg.org/forgejo/forgejo"
+        "code.forgejo.org/forgejo/forgejo"
       ],
       "commitMessageAction": "use",
       "commitMessageTopic": "forgejo",
@@ -30,7 +30,7 @@
         "docker"
       ],
       "matchPackageNames": [
-        "codeberg.org/forgejo/forgejo"
+        "code.forgejo.org/forgejo/forgejo"
       ],
       "matchUpdateTypes": [
         "major"
