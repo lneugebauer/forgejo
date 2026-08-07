@@ -1,0 +1,106 @@
+name: Tag and Release
+
+# Runs after a Dockerfile change lands on main (typically a merged Renovate PR).
+# Works out the next repository version, creates the tag and GitHub release, then
+# invokes the image build directly -- a tag created with GITHUB_TOKEN would not
+# trigger docker-build.yml on its own.
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'Dockerfile' ]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Full history and tags are needed to find the previous release and read
+          # the Dockerfile as it looked at that point.
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: version
+        run: |
+          set -euo pipefail
+
+          # Reads the tag off the first `FROM .../forgejo:X.Y.Z` line on stdin.
+          extract_forgejo_version() {
+            sed -n '/^FROM .*\/forgejo:/{s|^FROM .*/forgejo:\([0-9][0-9.]*\).*|\1|p;q;}'
+          }
+
+          if git describe --exact-match --match 'v*.*.*' --tags HEAD >/dev/null 2>&1; then
+            echo "HEAD is already released as $(git describe --exact-match --match 'v*.*.*' --tags HEAD), nothing to do." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          new_forgejo="$(extract_forgejo_version < Dockerfile)"
+          if [ -z "$new_forgejo" ]; then
+            echo "Could not read the Forgejo version from the Dockerfile FROM line." >&2
+            exit 1
+          fi
+
+          prev_tag="$(git describe --tags --abbrev=0 --match 'v*.*.*' HEAD 2>/dev/null || true)"
+
+          if [ -z "$prev_tag" ]; then
+            next="v0.1.0"
+          else
+            old_forgejo="$(git show "$prev_tag:Dockerfile" | extract_forgejo_version)"
+            IFS=. read -r major minor patch <<< "${prev_tag#v}"
+
+            # A new Forgejo major (i.e. the next LTS line) bumps the repo minor,
+            # everything else bumps the repo patch. Matches the existing tag history.
+            if [ "${new_forgejo%%.*}" != "${old_forgejo%%.*}" ]; then
+              minor=$((minor + 1))
+              patch=0
+            else
+              patch=$((patch + 1))
+            fi
+            next="v${major}.${minor}.${patch}"
+          fi
+
+          if git rev-parse -q --verify "refs/tags/${next}" >/dev/null; then
+            echo "Tag ${next} already exists, skipping release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "version=${next}" >> "$GITHUB_OUTPUT"
+          echo "forgejo=${new_forgejo}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${next} with Forgejo ${new_forgejo}." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create release
+        if: steps.version.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          FORGEJO_VERSION: ${{ steps.version.outputs.forgejo }}
+        run: |
+          set -euo pipefail
+          # Creates the lightweight tag on $GITHUB_SHA as a side effect.
+          gh release create "$VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "$VERSION" \
+            --notes "Based on [Forgejo v${FORGEJO_VERSION}](https://codeberg.org/forgejo/forgejo/releases/tag/v${FORGEJO_VERSION})." \
+            --generate-notes
+
+  build:
+    needs: tag
+    if: needs.tag.outputs.version != ''
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      version: ${{ needs.tag.outputs.version }}

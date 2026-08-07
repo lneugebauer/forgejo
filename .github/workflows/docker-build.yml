@@ -1,6 +1,15 @@
 name: Build and Push Docker Image
 
 on:
+  # Called by release.yml right after it creates the release. A tag created with
+  # GITHUB_TOKEN does not trigger workflows, so the build has to be invoked directly.
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release tag to build, e.g. v0.4.6'
+        required: true
+        type: string
+  # Manual escape hatch: pushing a tag by hand still builds and publishes.
   push:
     tags: [ 'v*.*.*' ]
 
@@ -14,6 +23,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+    env:
+      # Empty on a tag push, where the tag itself is the version.
+      VERSION: ${{ inputs.version || github.ref_name }}
 
     steps:
       - name: Checkout repository
@@ -34,10 +47,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # latest=auto only applies to tag events, so it would stop tagging `latest`
+          # when this workflow is invoked via workflow_call. Set it explicitly.
+          flavor: latest=true
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }}
+            type=semver,pattern={{major}},value=${{ env.VERSION }}
             type=sha,prefix=
 
       - name: Build and push Docker image
