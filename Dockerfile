@@ -1,4 +1,4 @@
-FROM code.forgejo.org/forgejo/forgejo:15.0.8
+FROM code.forgejo.org/forgejo/forgejo:15.0.9
 
 RUN apk update && \
     apk add ruby ruby-dev build-base && \
